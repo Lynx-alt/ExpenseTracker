@@ -486,3 +486,5 @@ $RECYCLE.BIN/
 *.db
 *.db-shm
 *.db-wal
+
+# File di log locali (Serilog)
