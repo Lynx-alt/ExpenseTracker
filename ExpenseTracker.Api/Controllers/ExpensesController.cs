@@ -1,8 +1,13 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ExpenseTracker.Api.Data;
+﻿using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.DTOs;
 using ExpenseTracker.Shared.Models;
+using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System;
+using System.Runtime.ConstrainedExecution;
+using System.Runtime.Intrinsics.X86;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace ExpenseTracker.Api.Controllers;
 
@@ -137,4 +142,74 @@ public class ExpensesController : ControllerBase
 
         return NoContent();
     }
+
+    // GET: api/expenses/summary-by-month
+    [HttpGet("summary-by-month")]
+    [ProducesResponseType(typeof(List<MonthlySummaryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<MonthlySummaryDto>>> GetSummaryByMonth()
+    {
+        var summary = await _context.Expenses
+            .GroupBy(e => new { e.Date.Year, e.Date.Month })
+            .Select(g => new MonthlySummaryDto
+            {
+                Year = g.Key.Year,
+                Month = g.Key.Month,
+                TotalAmount = g.Sum(e => e.Amount)
+            })
+            .OrderByDescending(s => s.Year).ThenByDescending(s => s.Month)
+            .ToListAsync();
+
+
+        return Ok(summary);
+    }
+
+    // GET: api/expenses/month-comparison
+    [HttpGet("month-comparison")]
+    [ProducesResponseType(typeof(MonthComparisonDto), StatusCodes.Status200OK)]
+    public async Task<ActionResult<MonthComparisonDto>> GetMonthComparison()
+    {
+        var now = DateTime.Now;
+        var previousMonthDate = now.AddMonths(-1);
+
+        var currentMonthTotal = await _context.Expenses
+            .Where(e => e.Date.Year == now.Year && e.Date.Month == now.Month)
+            .SumAsync(e => e.Amount);
+
+        var previousMonthTotal = await _context.Expenses
+            .Where(e => e.Date.Year == previousMonthDate.Year && e.Date.Month == previousMonthDate.Month)
+            .SumAsync(e => e.Amount);
+
+        decimal? percentageChange = previousMonthTotal == 0
+            ? null
+            : ((currentMonthTotal - previousMonthTotal) / previousMonthTotal) * 100;
+
+        return Ok(new MonthComparisonDto
+        {
+            CurrentMonthTotal = currentMonthTotal,
+            PreviousMonthTotal = previousMonthTotal,
+            PercentageChange = percentageChange
+        });
+    }
+
+    // GET: api/expenses/summary-by-category
+    [HttpGet("summary-by-category")]
+    [ProducesResponseType(typeof(List<CategorySummaryDto>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<List<CategorySummaryDto>>> GetSummaryByCategory()
+    {
+        var now = DateTime.Now;
+
+        var summary = await _context.Expenses
+            .Where(e => e.Date.Year == now.Year && e.Date.Month == now.Month)
+            .GroupBy(e => new { e.CategoryId, e.Category!.Name })
+            .Select(g => new CategorySummaryDto
+            {
+                CategoryId = g.Key.CategoryId,
+                CategoryName = g.Key.Name,
+                TotalAmount = g.Sum(e => e.Amount)
+            })
+            .ToListAsync();
+
+        return Ok(summary);
+    }
+
 }
