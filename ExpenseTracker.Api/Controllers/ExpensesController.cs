@@ -47,9 +47,11 @@ public class ExpensesController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ExpenseDto>> GetExpense(int id)
     {
+        var currentUserId = CurrentUserId;
+
         var expense = await _context.Expenses
             .Include(e => e.Category)
-            .FirstOrDefaultAsync(e => e.Id == id);
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == currentUserId);
 
         if (expense == null)
         {
@@ -78,7 +80,7 @@ public class ExpensesController : BaseApiController
             Amount = dto.Amount,
             Date = dto.Date,
             CategoryId = dto.CategoryId,
-            UserId = GetCurrentUserId()
+            UserId = CurrentUserId
         };
 
         _context.Expenses.Add(expense);
@@ -105,7 +107,9 @@ public class ExpensesController : BaseApiController
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateExpense(int id, CreateExpenseDto dto)
     {
-        var expense = await _context.Expenses.FindAsync(id);
+   
+        var expense = await _context.Expenses
+            .FirstOrDefaultAsync(e => e.Id == id && e.UserId == CurrentUserId);
 
         if (expense == null)
         {

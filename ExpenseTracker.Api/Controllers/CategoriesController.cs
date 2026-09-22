@@ -28,7 +28,7 @@ public class CategoriesController : BaseApiController
             .Select(c => new CategoryDto { Id = c.Id, Name = c.Name })
             .ToListAsync();
 
-        return Ok(categories);
+        return Ok(categories);  
     }
 
     // GET: api/categories/5
@@ -52,7 +52,7 @@ public class CategoriesController : BaseApiController
     [ProducesResponseType(typeof(CategoryDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<CategoryDto>> CreateCategory(CreateCategoryDto dto)
     {
-        var category = new Category { Name = dto.Name, UserId = GetCurrentUserId() };
+        var category = new Category { Name = dto.Name, UserId = CurrentUserId };
 
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();

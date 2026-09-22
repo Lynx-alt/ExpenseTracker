@@ -5,8 +5,13 @@ namespace ExpenseTracker.Api.Controllers;
 
 public abstract class BaseApiController : ControllerBase
 {
-    protected int GetCurrentUserId()
+    private int? _currentUserId;
+    protected int CurrentUserId
     {
-        return int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        get
+        {
+            _currentUserId ??= int.Parse(User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+            return _currentUserId.Value;
+        }
     }
 }
