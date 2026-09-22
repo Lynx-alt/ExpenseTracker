@@ -1,19 +1,17 @@
 ﻿using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.DTOs;
 using ExpenseTracker.Shared.Models;
-using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System;
-using System.Runtime.ConstrainedExecution;
-using System.Runtime.Intrinsics.X86;
-using static System.Net.Mime.MediaTypeNames;
+using Microsoft.AspNetCore.Authorization;
+
 
 namespace ExpenseTracker.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ExpensesController : ControllerBase
+[Authorize]
+public class ExpensesController : BaseApiController
 {
     private readonly ExpenseTrackerDbContext _context;
 
@@ -80,7 +78,7 @@ public class ExpensesController : ControllerBase
             Amount = dto.Amount,
             Date = dto.Date,
             CategoryId = dto.CategoryId,
-            UserId = 1
+            UserId = GetCurrentUserId()
         };
 
         _context.Expenses.Add(expense);

@@ -1,14 +1,16 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using ExpenseTracker.Api.Data;
+﻿using ExpenseTracker.Api.Data;
 using ExpenseTracker.Api.DTOs;
 using ExpenseTracker.Shared.Models;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace ExpenseTracker.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class CategoriesController : ControllerBase
+[Authorize]
+public class CategoriesController : BaseApiController
 {
     private readonly ExpenseTrackerDbContext _context;
 
@@ -50,7 +52,7 @@ public class CategoriesController : ControllerBase
     [ProducesResponseType(typeof(CategoryDto), StatusCodes.Status201Created)]
     public async Task<ActionResult<CategoryDto>> CreateCategory(CreateCategoryDto dto)
     {
-        var category = new Category { Name = dto.Name, UserId = 1 };
+        var category = new Category { Name = dto.Name, UserId = GetCurrentUserId() };
 
         _context.Categories.Add(category);
         await _context.SaveChangesAsync();

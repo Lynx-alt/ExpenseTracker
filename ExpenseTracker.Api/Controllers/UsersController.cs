@@ -1,7 +1,10 @@
 ﻿// UsersController.cs (temporaneo, solo per test)
+
 using ExpenseTracker.Api.Data;
 using ExpenseTracker.Shared.Models;
 using Microsoft.AspNetCore.Mvc;
+
+namespace ExpenseTracker.Api.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
