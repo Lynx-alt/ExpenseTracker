@@ -1,0 +1,49 @@
+﻿@page "/register"
+
+@using ExpenseTracker.Client.Services
+@using ExpenseTracker.Shared.DTOs
+@inject AuthService AuthService
+@inject NavigationManager Navigation
+
+<h3>Registrati</h3>
+
+<EditForm Model="registerDto" OnValidSubmit="HandleRegister">
+    <div>
+        <label>Username</label>
+        <InputText @bind-Value="registerDto.Username" />
+    </div>
+    <div>
+        <label>Email</label>
+        <InputText @bind-Value="registerDto.Email" />
+    </div>
+    <div>
+        <label>Password</label>
+        <InputText @bind-Value="registerDto.Password" type="password" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <p style="color: red">@errorMessage</p>
+    }
+
+    <button type="submit">Registrati</button>
+</EditForm>
+
+@code {
+    private RegisterDto registerDto = new();
+    private string? errorMessage;
+
+    private async Task HandleRegister()
+    {
+        var success = await AuthService.RegisterAsync(registerDto);
+
+        if (success)
+        {
+            Navigation.NavigateTo("/");
+        }
+        else
+        {
+            errorMessage = "Registrazione fallita. L'email potrebbe essere già in uso.";
+        }
+    }
+}

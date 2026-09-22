@@ -1,6 +1,6 @@
 ﻿using ExpenseTracker.Shared.Enums;
 
-namespace ExpenseTracker.Api.DTOs;
+namespace ExpenseTracker.Shared.DTOs;
 
 public class CreateRecurringExpenseDto
 {

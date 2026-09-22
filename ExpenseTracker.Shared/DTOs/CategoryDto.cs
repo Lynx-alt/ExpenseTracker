@@ -1,4 +1,4 @@
-﻿namespace ExpenseTracker.Api.DTOs
+﻿namespace ExpenseTracker.Shared.DTOs
 {
     public class CategoryDto
     {

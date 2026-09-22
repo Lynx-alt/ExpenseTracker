@@ -2,7 +2,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using ExpenseTracker.Api.Data;
-using ExpenseTracker.Api.DTOs;
+using ExpenseTracker.Shared.DTOs;
 using ExpenseTracker.Shared.Models;
 
 namespace ExpenseTracker.Api.Controllers;

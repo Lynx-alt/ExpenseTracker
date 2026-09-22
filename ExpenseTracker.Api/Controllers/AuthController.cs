@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using ExpenseTracker.Api.Data;
-using ExpenseTracker.Api.DTOs;
 using ExpenseTracker.Api.Services;
+using ExpenseTracker.Shared.DTOs;
 using ExpenseTracker.Shared.Models;
 
 namespace ExpenseTracker.Api.Controllers;

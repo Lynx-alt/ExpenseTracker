@@ -49,6 +49,8 @@ builder.Services.AddDbContext<ExpenseTrackerDbContext>(options =>
 builder.Services.AddControllers();
 builder.Services.AddScoped<JwtService>();
 
+
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -66,6 +68,16 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowClient", policy =>
+    {
+        policy.WithOrigins("https://localhost:7212") // <-- la porta ESATTA del tuo Client
+            .AllowAnyMethod()
+            .AllowAnyHeader();
+    });
+});
 
 var app = builder.Build();
 
@@ -87,7 +99,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
+app.UseCors("AllowClient");
 app.UseAuthentication();
 app.UseAuthorization();
 
