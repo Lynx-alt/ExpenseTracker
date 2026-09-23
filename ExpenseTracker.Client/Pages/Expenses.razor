@@ -1,0 +1,115 @@
+﻿@page "/expenses"
+@attribute [Authorize]
+
+@using ExpenseTracker.Client.Services
+@using ExpenseTracker.Shared.DTOs
+@using Microsoft.AspNetCore.Authorization
+
+@inject ExpenseService ExpenseService
+@inject CategoryService CategoryService
+
+<h3>Le tue spese</h3>
+
+<EditForm Model="newExpense" OnValidSubmit="HandleCreate">
+    <div class="row g-2 mb-3">
+        <div class="col">
+            <InputText @bind-Value="newExpense.Description" class="form-control" placeholder="Descrizione" />
+        </div>
+        <div class="col">
+            <InputNumber @bind-Value="newExpense.Amount" class="form-control" placeholder="Importo" />
+        </div>
+        <div class="col">
+            <InputDate @bind-Value="newExpense.Date" class="form-control" />
+        </div>
+        <div class="col">
+            <InputSelect @bind-Value="newExpense.CategoryId" class="form-select">
+                <option value="0">Seleziona categoria</option>
+                @foreach (var category in categories)
+                {
+                    <option value="@category.Id">@category.Name</option>
+                }
+            </InputSelect>
+        </div>
+        <div class="col-auto">
+            <button type="submit" class="btn btn-primary">Aggiungi</button>
+        </div>
+    </div>
+</EditForm>
+
+@if (isLoading)
+{
+    <p>Caricamento...</p>
+}
+else if (expenses.Count == 0)
+{
+    <p>Nessuna spesa ancora registrata.</p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Descrizione</th>
+                <th>Categoria</th>
+                <th>Importo</th>
+                <th>Data</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var expense in expenses)
+            {
+                <tr>
+                    <td>@expense.Description</td>
+                    <td>@expense.CategoryName</td>
+                    <td>@expense.Amount.ToString("C")</td>
+                    <td>@expense.Date.ToShortDateString()</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger" @onclick="() => HandleDelete(expense.Id)">
+                            Elimina
+                        </button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<ExpenseDto> expenses = new();
+    private List<CategoryDto> categories = new();
+    private CreateExpenseDto newExpense = new() { Date = DateTime.Today };
+    private bool isLoading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        categories = await CategoryService.GetCategoriesAsync();
+        await LoadExpenses();
+    }
+
+    private async Task LoadExpenses()
+    {
+        isLoading = true;
+        expenses = await ExpenseService.GetExpensesAsync();
+        isLoading = false;
+    }
+
+    private async Task HandleCreate()
+    {
+        var success = await ExpenseService.CreateExpenseAsync(newExpense);
+        if (success)
+        {
+            newExpense = new() { Date = DateTime.Today };
+            await LoadExpenses();
+        }
+    }
+
+    private async Task HandleDelete(int id)
+    {
+        var success = await ExpenseService.DeleteExpenseAsync(id);
+        if (success)
+        {
+            await LoadExpenses();
+        }
+    }
+}
