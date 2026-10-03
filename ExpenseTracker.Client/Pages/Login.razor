@@ -1,49 +1,83 @@
 ﻿@page "/login"
-
+@layout AuthLayout
 @using ExpenseTracker.Client.Services
 @using ExpenseTracker.Shared.DTOs
-
-
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 
-<h3>Accedi</h3>
+<PageTitle>Accedi · ExpenseTracker</PageTitle>
 
-<EditForm Model="loginDto" OnValidSubmit="HandleLogin">
-    <div>
-        <label>Email</label>
-        <InputText @bind-Value="loginDto.Email" />
-    </div>
-    <div>
-        <label>Password</label>
-        <InputText @bind-Value="loginDto.Password" type="password" />
-    </div>
+<div class="auth-card">
+    <h1 class="serif auth-title">Accedi</h1>
+    <p class="auth-intro">Inserisci le tue credenziali per continuare.</p>
 
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <p style="color: red">@errorMessage</p>
-    }
+    <EditForm Model="loginDto" OnValidSubmit="HandleLogin">
+        <DataAnnotationsValidator />
 
-    <button type="submit">Accedi</button>
-</EditForm>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="auth-error" role="alert">@errorMessage</div>
+        }
 
-<p>Non hai un account? <a href="/register">Registrati</a></p>
+        <div class="auth-field">
+            <label class="field-label" for="login-email">Email</label>
+            <InputText id="login-email" type="email" autocomplete="email" placeholder="nome@esempio.it"
+                       @bind-Value="loginDto.Email" class="form-control" />
+            <ValidationMessage For="() => loginDto.Email" />
+        </div>
+
+        <div class="auth-field">
+            <label class="field-label" for="login-password">Password</label>
+            <InputText id="login-password" type="password" autocomplete="current-password"
+                       @bind-Value="loginDto.Password" class="form-control" />
+            <ValidationMessage For="() => loginDto.Password" />
+        </div>
+
+        <button type="submit" class="btn-accent auth-submit" disabled="@isSubmitting">
+            @(isSubmitting ? "Accesso in corso..." : "Accedi")
+        </button>
+    </EditForm>
+
+    <p class="auth-switch">Non hai un account? <a href="register">Registrati</a></p>
+</div>
 
 @code {
+    [SupplyParameterFromQuery]
+    public string? ReturnUrl { get; set; }
+
     private LoginDto loginDto = new();
     private string? errorMessage;
+    private bool isSubmitting;
 
     private async Task HandleLogin()
     {
-        var success = await AuthService.LoginAsync(loginDto);
+        errorMessage = null;
+        isSubmitting = true;
 
-        if (success)
+        try
         {
-            Navigation.NavigateTo("/");
+            if (await AuthService.LoginAsync(loginDto))
+            {
+                Navigation.NavigateTo(SafeReturnUrl());
+            }
+            else
+            {
+                errorMessage = "Email o password non corretti.";
+            }
         }
-        else
+        catch (HttpRequestException)
         {
-            errorMessage = "Email o password non corretti.";
+            errorMessage = "Server non raggiungibile. Riprova tra poco.";
+        }
+        finally
+        {
+            isSubmitting = false;
         }
     }
+
+    // Accetta solo percorsi interni all'app, mai indirizzi esterni
+    private string SafeReturnUrl() =>
+        string.IsNullOrEmpty(ReturnUrl) || !ReturnUrl.StartsWith('/') || ReturnUrl.StartsWith("//")
+            ? "/"
+            : ReturnUrl;
 }

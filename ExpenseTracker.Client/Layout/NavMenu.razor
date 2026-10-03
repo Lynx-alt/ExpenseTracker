@@ -1,55 +1,31 @@
 ﻿@using ExpenseTracker.Client.Services
 @using Microsoft.AspNetCore.Components.Authorization
 
-<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">ExpenseTracker</a>
-    </div>
-</div>
+<nav class="sidebar" aria-label="Navigazione principale">
+    <div class="sidebar-brand">ExpenseTracker</div>
 
-<input type="checkbox" title="Navigation menu" class="navbar-toggler" />
+    <NavLink class="sidebar-link" href="" Match="NavLinkMatch.All">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="9" rx="1.5"></rect><rect x="14" y="3" width="7" height="5" rx="1.5"></rect><rect x="14" y="12" width="7" height="9" rx="1.5"></rect><rect x="3" y="16" width="7" height="5" rx="1.5"></rect></svg>
+        Dashboard
+    </NavLink>
 
-<div class="nav-scrollable" onclick="document.querySelector('.navbar-toggler').click()">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
-            </NavLink>
-        </div>
+    <div style="flex-grow: 1;"></div>
 
-        <AuthorizeView>
-            <Authorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="expenses">
-                        Spese
-                    </NavLink>
+    <AuthorizeView>
+        <Authorized>
+            <div class="user-block">
+                <div class="user-avatar" aria-hidden="true">@Initial(context.User.Identity?.Name)</div>
+                <div>
+                    <div class="user-name">@context.User.Identity?.Name</div>
+                    <button class="user-logout" @onclick="Logout">Esci</button>
                 </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="categories">
-                        Categorie
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <button class="nav-link btn btn-link" @onclick="Logout">
-                        Logout (@context.User.Identity?.Name)
-                    </button>
-                </div>
-            </Authorized>
-            <NotAuthorized>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="login">
-                        Accedi
-                    </NavLink>
-                </div>
-                <div class="nav-item px-3">
-                    <NavLink class="nav-link" href="register">
-                        Registrati
-                    </NavLink>
-                </div>
-            </NotAuthorized>
-        </AuthorizeView>
-    </nav>
-</div>
+            </div>
+        </Authorized>
+        <NotAuthorized>
+            <NavLink class="sidebar-link" href="login">Accedi</NavLink>
+        </NotAuthorized>
+    </AuthorizeView>
+</nav>
 
 @code {
     [Inject] private AuthService AuthService { get; set; } = default!;
@@ -60,4 +36,7 @@
         await AuthService.LogoutAsync();
         Navigation.NavigateTo("/login");
     }
+
+    private static string Initial(string? name) =>
+        string.IsNullOrEmpty(name) ? "?" : name[..1].ToUpper();
 }

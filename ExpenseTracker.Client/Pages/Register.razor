@@ -1,49 +1,82 @@
 ﻿@page "/register"
-
+@layout AuthLayout
 @using ExpenseTracker.Client.Services
 @using ExpenseTracker.Shared.DTOs
 @inject AuthService AuthService
 @inject NavigationManager Navigation
 
-<h3>Registrati</h3>
+<PageTitle>Registrati · ExpenseTracker</PageTitle>
 
-<EditForm Model="registerDto" OnValidSubmit="HandleRegister">
-    <div>
-        <label>Username</label>
-        <InputText @bind-Value="registerDto.Username" />
-    </div>
-    <div>
-        <label>Email</label>
-        <InputText @bind-Value="registerDto.Email" />
-    </div>
-    <div>
-        <label>Password</label>
-        <InputText @bind-Value="registerDto.Password" type="password" />
-    </div>
+<div class="auth-card">
+    <h1 class="serif auth-title">Crea un account</h1>
+    <p class="auth-intro">Bastano pochi secondi per iniziare a tenere traccia delle tue spese.</p>
 
-    @if (!string.IsNullOrEmpty(errorMessage))
-    {
-        <p style="color: red">@errorMessage</p>
-    }
+    <EditForm Model="registerDto" OnValidSubmit="HandleRegister">
+        <DataAnnotationsValidator />
 
-    <button type="submit">Registrati</button>
-</EditForm>
+        @if (!string.IsNullOrEmpty(errorMessage))
+        {
+            <div class="auth-error" role="alert">@errorMessage</div>
+        }
+
+        <div class="auth-field">
+            <label class="field-label" for="reg-username">Nome utente</label>
+            <InputText id="reg-username" autocomplete="username"
+                       @bind-Value="registerDto.Username" class="form-control" />
+            <ValidationMessage For="() => registerDto.Username" />
+        </div>
+
+        <div class="auth-field">
+            <label class="field-label" for="reg-email">Email</label>
+            <InputText id="reg-email" type="email" autocomplete="email" placeholder="nome@esempio.it"
+                       @bind-Value="registerDto.Email" class="form-control" />
+            <ValidationMessage For="() => registerDto.Email" />
+        </div>
+
+        <div class="auth-field">
+            <label class="field-label" for="reg-password">Password</label>
+            <InputText id="reg-password" type="password" autocomplete="new-password"
+                       @bind-Value="registerDto.Password" class="form-control" />
+            <div class="auth-hint">Almeno 8 caratteri.</div>
+            <ValidationMessage For="() => registerDto.Password" />
+        </div>
+
+        <button type="submit" class="btn-accent auth-submit" disabled="@isSubmitting">
+            @(isSubmitting ? "Creazione account..." : "Crea account")
+        </button>
+    </EditForm>
+
+    <p class="auth-switch">Hai già un account? <a href="login">Accedi</a></p>
+</div>
 
 @code {
     private RegisterDto registerDto = new();
     private string? errorMessage;
+    private bool isSubmitting;
 
     private async Task HandleRegister()
     {
-        var success = await AuthService.RegisterAsync(registerDto);
+        errorMessage = null;
+        isSubmitting = true;
 
-        if (success)
+        try
         {
-            Navigation.NavigateTo("/");
+            if (await AuthService.RegisterAsync(registerDto))
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = "Registrazione non riuscita. L'email potrebbe essere già in uso.";
+            }
         }
-        else
+        catch (HttpRequestException)
         {
-            errorMessage = "Registrazione fallita. L'email potrebbe essere già in uso.";
+            errorMessage = "Server non raggiungibile. Riprova tra poco.";
+        }
+        finally
+        {
+            isSubmitting = false;
         }
     }
 }

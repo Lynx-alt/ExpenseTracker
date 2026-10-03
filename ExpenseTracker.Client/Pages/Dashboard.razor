@@ -1,0 +1,399 @@
+﻿@page "/"
+@attribute [Authorize]
+@using System.Globalization
+@using ExpenseTracker.Client.Services
+@using ExpenseTracker.Shared.DTOs
+@using Microsoft.AspNetCore.Authorization
+@inject ExpenseService ExpenseService
+@inject CategoryService CategoryService
+
+<PageTitle>Dashboard · ExpenseTracker</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="page-subtitle">@Capitalize(DateTime.Today.ToString("MMMM yyyy"))</div>
+        <h1 class="serif page-title">Dashboard</h1>
+    </div>
+    <div class="header-actions">
+        <button class="btn-soft" @onclick="() => showCategoriesModal = true">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.59 13.41 13.42 20.58a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><circle cx="7" cy="7" r="1.5"></circle></svg>
+            Categorie
+        </button>
+        <button class="btn-accent" @onclick="OpenExpenseModal">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"></path></svg>
+            Aggiungi spesa
+        </button>
+    </div>
+</div>
+
+@if (isLoading)
+{
+    <p class="muted">Caricamento...</p>
+}
+else
+{
+    <div class="stats-grid">
+        <div class="card">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+                <div class="stat-label">Speso questo mese</div>
+                <span class="pill" style="@DeltaStyle">@DeltaText</span>
+            </div>
+            <div class="hero-value num">@currentMonthTotal.ToString("C")</div>
+            <div class="hero-sub">
+                @(currentMonthCount == 1 ? "1 spesa" : $"{currentMonthCount} spese")
+                in @(currentMonthCategoryCount == 1 ? "1 categoria" : $"{currentMonthCategoryCount} categorie")
+            </div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Mese scorso</div>
+            <div class="stat-value num">@((comparison?.PreviousMonthTotal ?? 0).ToString("C"))</div>
+        </div>
+        <div class="card">
+            <div class="stat-label">Spesa media</div>
+            <div class="stat-value num">@averageExpense.ToString("C")</div>
+        </div>
+    </div>
+
+    <div class="two-col">
+        <div class="card">
+            <div class="card-title">Spese per categoria</div>
+            @if (categorySummary.Count == 0)
+            {
+                <p class="muted" style="margin: 0;">Nessuna spesa questo mese.</p>
+            }
+            else
+            {
+                var total = categorySummary.Sum(c => c.TotalAmount);
+                foreach (var item in categorySummary.OrderByDescending(c => c.TotalAmount))
+                {
+                    var share = total > 0 ? item.TotalAmount / total * 100 : 0;
+                    var color = ColorFor(item.CategoryId);
+                    <div class="cat-row">
+                        <div class="cat-row-head">
+                            <span class="cat-name"><span class="dot" style="background: @color.Dot;"></span>@item.CategoryName</span>
+                            <span class="num">@item.TotalAmount.ToString("C") <span class="muted">· @share.ToString("0")%</span></span>
+                        </div>
+                        <div class="bar-track">
+                            <div class="bar-fill" style="width: @Css(share)%; background: @color.Dot;"></div>
+                        </div>
+                    </div>
+                }
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-title">Ultimi 6 mesi</div>
+            <div class="month-chart">
+                @foreach (var m in lastSixMonths)
+                {
+                    <div class="month-col">
+                        <span class="month-value num">@(m.Total > 0 ? m.Total.ToString("C0") : "")</span>
+                        <div class="month-bar-area">
+                            <div class="month-bar @(m.IsCurrent ? "current" : m.Total > 0 ? "has-value" : "")"
+                                 style="height: @Css(m.HeightPercent)%;"></div>
+                        </div>
+                        <span class="month-label @(m.IsCurrent ? "current" : "")">@m.Label</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="card" style="padding: 8px;">
+        @if (expenses.Count == 0)
+        {
+            <div class="empty-state">
+                <div class="serif" style="font-size: 24px; color: var(--text);">Nessuna spesa ancora</div>
+                <p>Aggiungi la prima spesa per vedere qui il riepilogo.</p>
+                <button class="btn-accent" @onclick="OpenExpenseModal">Aggiungi spesa</button>
+            </div>
+        }
+        else
+        {
+            <table class="app-table">
+                <thead>
+                    <tr>
+                        <th>Descrizione</th>
+                        <th>Categoria</th>
+                        <th>Data</th>
+                        <th class="col-amount">Importo</th>
+                        <th style="width: 44px;"><span class="visually-hidden">Azioni</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var expense in expenses.OrderByDescending(e => e.Date).ThenByDescending(e => e.Id))
+                    {
+                        var color = ColorFor(expense.CategoryId);
+                        <tr>
+                            <td>@expense.Description</td>
+                            <td><span class="pill" style="background: @color.PillBg; color: @color.PillText;">@expense.CategoryName</span></td>
+                            <td class="muted">@expense.Date.ToString("d MMM")</td>
+                            <td class="col-amount num">@expense.Amount.ToString("C")</td>
+                            <td style="text-align: right;">
+                                <button class="row-delete" aria-label="Elimina @expense.Description" @onclick="() => pendingDelete = expense">
+                                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2m2 0-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"></path></svg>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </div>
+}
+
+@if (showExpenseModal)
+{
+    <div class="modal-overlay" @onclick="CloseExpenseModal">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="expense-modal-title" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2 id="expense-modal-title" class="serif modal-title">Nuova spesa</h2>
+                <button class="modal-close" aria-label="Chiudi" @onclick="CloseExpenseModal">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+                </button>
+            </div>
+
+            <EditForm Model="newExpense" OnValidSubmit="HandleCreateExpense">
+                <div style="display: flex; flex-direction: column; gap: 16px;">
+                    <div>
+                        <label class="field-label" for="exp-amount">Importo (€)</label>
+                        <InputNumber id="exp-amount" @bind-Value="newExpense.Amount" class="form-control field-amount" />
+                    </div>
+                    <div>
+                        <label class="field-label" for="exp-desc">Descrizione</label>
+                        <InputText id="exp-desc" @bind-Value="newExpense.Description" class="form-control" placeholder="Es. Pranzo con colleghi" />
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                        <div>
+                            <label class="field-label" for="exp-date">Data</label>
+                            <InputDate id="exp-date" @bind-Value="newExpense.Date" class="form-control" />
+                        </div>
+                        <div>
+                            <label class="field-label" for="exp-cat">Categoria</label>
+                            <InputSelect id="exp-cat" @bind-Value="newExpense.CategoryId" class="form-select">
+                                <option value="0">Scegli...</option>
+                                @foreach (var c in categories)
+                                {
+                                    <option value="@c.Id">@c.Name</option>
+                                }
+                            </InputSelect>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(formError))
+                    {
+                        <p class="form-error">@formError</p>
+                    }
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="btn-soft" style="flex: 1; justify-content: center;" @onclick="CloseExpenseModal">Annulla</button>
+                    <button type="submit" class="btn-accent" style="flex: 2; justify-content: center;">Salva spesa</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+@if (showCategoriesModal)
+{
+    <div class="modal-overlay" @onclick="() => showCategoriesModal = false">
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="cat-modal-title" @onclick:stopPropagation="true">
+            <div class="modal-header">
+                <h2 id="cat-modal-title" class="serif modal-title">Categorie</h2>
+                <button class="modal-close" aria-label="Chiudi" @onclick="() => showCategoriesModal = false">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"></path></svg>
+                </button>
+            </div>
+
+            <EditForm Model="newCategory" OnValidSubmit="HandleCreateCategory">
+                <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+                    <InputText @bind-Value="newCategory.Name" class="form-control" placeholder="Nuova categoria" aria-label="Nome nuova categoria" />
+                    <button type="submit" class="btn-accent" style="height: 44px;">Aggiungi</button>
+                </div>
+            </EditForm>
+
+            <ul class="cat-list">
+                @foreach (var c in categories)
+                {
+                    <li><span class="dot" style="background: @ColorFor(c.Id).Dot;"></span>@c.Name</li>
+                }
+            </ul>
+        </div>
+    </div>
+}
+
+@if (pendingDelete is not null)
+{
+    <div class="modal-overlay" @onclick="() => pendingDelete = null">
+        <div class="modal-card" role="alertdialog" aria-modal="true" aria-labelledby="del-title" style="width: 380px;" @onclick:stopPropagation="true">
+            <h2 id="del-title" class="serif modal-title" style="font-size: 26px;">Eliminare la spesa?</h2>
+            <p class="muted" style="margin: 12px 0 0;">
+                «@pendingDelete.Description» da @pendingDelete.Amount.ToString("C") verrà eliminata definitivamente.
+            </p>
+            <div class="modal-actions">
+                <button class="btn-soft" style="flex: 1; justify-content: center;" @onclick="() => pendingDelete = null">Annulla</button>
+                <button class="btn-danger" style="flex: 1; justify-content: center;" @onclick="ConfirmDelete">Elimina</button>
+            </div>
+        </div>
+    </div>
+}
+
+@if (toastMessage is not null)
+{
+    <div class="toast-msg" role="status">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FAE8B" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg>
+        @toastMessage
+    </div>
+}
+
+@code {
+    private record MonthBar(string Label, decimal Total, decimal HeightPercent, bool IsCurrent);
+
+    // Tinte pastello per le categorie: (pallino/barra, sfondo pillola, testo pillola)
+    private static readonly (string Dot, string PillBg, string PillText)[] Palette =
+    {
+        ("#8FAE8B", "#E3EDE1", "#56724F"),
+        ("#E8A48C", "#FBE3DA", "#A35A45"),
+        ("#C9A86A", "#F4EAD3", "#80672E"),
+        ("#A99BC9", "#ECE7F5", "#5F5288"),
+        ("#8FB3C4", "#E1EDF2", "#4A6E7E"),
+        ("#D69AA8", "#F7E4E8", "#8E4E5D"),
+    };
+
+    private List<ExpenseDto> expenses = new();
+    private List<CategoryDto> categories = new();
+    private List<CategorySummaryDto> categorySummary = new();
+    private List<MonthBar> lastSixMonths = new();
+    private MonthComparisonDto? comparison;
+
+    private CreateExpenseDto newExpense = new() { Date = DateTime.Today };
+    private CreateCategoryDto newCategory = new();
+    private ExpenseDto? pendingDelete;
+    private string? formError;
+    private string? toastMessage;
+
+    private bool isLoading = true;
+    private bool showExpenseModal;
+    private bool showCategoriesModal;
+
+    private decimal currentMonthTotal;
+    private int currentMonthCount;
+    private int currentMonthCategoryCount;
+    private decimal averageExpense;
+
+    protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task LoadAll()
+    {
+        categories = await CategoryService.GetCategoriesAsync();
+        expenses = await ExpenseService.GetExpensesAsync();
+        categorySummary = await ExpenseService.GetSummaryByCategoryAsync();
+        var monthly = await ExpenseService.GetSummaryByMonthAsync();
+        comparison = await ExpenseService.GetMonthComparisonAsync();
+
+        var today = DateTime.Today;
+        var thisMonth = expenses.Where(e => e.Date.Year == today.Year && e.Date.Month == today.Month).ToList();
+        currentMonthTotal = comparison?.CurrentMonthTotal ?? thisMonth.Sum(e => e.Amount);
+        currentMonthCount = thisMonth.Count;
+        currentMonthCategoryCount = thisMonth.Select(e => e.CategoryId).Distinct().Count();
+        averageExpense = currentMonthCount > 0 ? currentMonthTotal / currentMonthCount : 0;
+
+        lastSixMonths = BuildLastSixMonths(monthly, today);
+        isLoading = false;
+    }
+
+    // Costruisce sempre 6 colonne, anche per i mesi senza spese (a zero)
+    private static List<MonthBar> BuildLastSixMonths(List<MonthlySummaryDto> monthly, DateTime today)
+    {
+        var months = Enumerable.Range(0, 6)
+            .Select(i => today.AddMonths(i - 5))
+            .Select(d => (Date: d, Total: monthly.FirstOrDefault(m => m.Year == d.Year && m.Month == d.Month)?.TotalAmount ?? 0))
+            .ToList();
+
+        var max = months.Max(m => m.Total);
+
+        return months.Select(m => new MonthBar(
+            Capitalize(m.Date.ToString("MMM").TrimEnd('.')),
+            m.Total,
+            max > 0 ? m.Total / max * 100 : 0,
+            m.Date.Year == today.Year && m.Date.Month == today.Month)).ToList();
+    }
+
+    private string DeltaText => comparison?.PercentageChange is decimal p
+        ? $"{(p > 0 ? "+" : "")}{p:0.#}% vs mese scorso"
+        : "Nessun confronto";
+
+    private string DeltaStyle => comparison?.PercentageChange is decimal p
+        ? (p > 0 ? "background: #FBE3DA; color: #A35A45;" : "background: #E3EDE1; color: #56724F;")
+        : "";
+
+    private void OpenExpenseModal()
+    {
+        newExpense = new() { Date = DateTime.Today };
+        formError = null;
+        showExpenseModal = true;
+    }
+
+    private void CloseExpenseModal() => showExpenseModal = false;
+
+    private async Task HandleCreateExpense()
+    {
+        if (newExpense.Amount <= 0) { formError = "L'importo deve essere maggiore di zero."; return; }
+        if (newExpense.CategoryId == 0) { formError = "Scegli una categoria."; return; }
+
+        if (await ExpenseService.CreateExpenseAsync(newExpense))
+        {
+            showExpenseModal = false;
+            await LoadAll();
+            _ = ShowToast("Spesa aggiunta");
+        }
+        else
+        {
+            formError = "Non è stato possibile salvare la spesa. Riprova.";
+        }
+    }
+
+    private async Task HandleCreateCategory()
+    {
+        if (string.IsNullOrWhiteSpace(newCategory.Name)) return;
+
+        if (await CategoryService.CreateCategoryAsync(newCategory))
+        {
+            newCategory = new();
+            await LoadAll();
+            _ = ShowToast("Categoria aggiunta");
+        }
+    }
+
+    private async Task ConfirmDelete()
+    {
+        if (pendingDelete is null) return;
+
+        var id = pendingDelete.Id;
+        pendingDelete = null;
+
+        if (await ExpenseService.DeleteExpenseAsync(id))
+        {
+            await LoadAll();
+            _ = ShowToast("Spesa eliminata");
+        }
+    }
+
+    private async Task ShowToast(string message)
+    {
+        toastMessage = message;
+        await InvokeAsync(StateHasChanged);
+        await Task.Delay(2500);
+        toastMessage = null;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private static (string Dot, string PillBg, string PillText) ColorFor(int categoryId) =>
+        Palette[Math.Abs(categoryId) % Palette.Length];
+
+    // Numeri dentro il CSS: sempre col punto, mai con la virgola italiana
+    private static string Css(decimal value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpper(s[0]) + s[1..];
+}
