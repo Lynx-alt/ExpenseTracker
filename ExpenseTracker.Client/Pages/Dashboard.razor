@@ -11,7 +11,15 @@
 
 <div class="page-header">
     <div>
-        <div class="page-subtitle">@Capitalize(DateTime.Today.ToString("MMMM yyyy"))</div>
+        <div class="month-nav">
+            <button class="month-nav-btn" aria-label="Mese precedente" @onclick="() => ChangeMonth(-1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6 6 6"></path></svg>
+            </button>
+            <span class="page-subtitle">@Capitalize(selectedMonth.ToString("MMMM yyyy"))</span>
+            <button class="month-nav-btn" aria-label="Mese successivo" disabled="@IsCurrentMonth" @onclick="() => ChangeMonth(1)">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6l6 6-6 6"></path></svg>
+            </button>
+        </div>
         <h1 class="serif page-title">Dashboard</h1>
     </div>
     <div class="header-actions">
@@ -35,7 +43,7 @@ else
     <div class="stats-grid">
         <div class="card">
             <div style="display: flex; align-items: center; justify-content: space-between;">
-                <div class="stat-label">Speso questo mese</div>
+                <div class="stat-label">@(IsCurrentMonth ? "Speso questo mese" : "Speso nel mese")</div>
                 <span class="pill" style="@DeltaStyle">@DeltaText</span>
             </div>
             <div class="hero-value num">@currentMonthTotal.ToString("C")</div>
@@ -45,7 +53,7 @@ else
             </div>
         </div>
         <div class="card">
-            <div class="stat-label">Mese scorso</div>
+            <div class="stat-label">@Capitalize(selectedMonth.AddMonths(-1).ToString("MMMM"))</div>
             <div class="stat-value num">@((comparison?.PreviousMonthTotal ?? 0).ToString("C"))</div>
         </div>
         <div class="card">
@@ -57,27 +65,49 @@ else
     <div class="two-col">
         <div class="card">
             <div class="card-title">Spese per categoria</div>
-            @if (categorySummary.Count == 0)
+            @if (donutSegments.Count == 0)
             {
-                <p class="muted" style="margin: 0;">Nessuna spesa questo mese.</p>
+                <p class="muted" style="margin: 0;">Nessuna spesa in questo mese.</p>
             }
             else
             {
-                var total = categorySummary.Sum(c => c.TotalAmount);
-                foreach (var item in categorySummary.OrderByDescending(c => c.TotalAmount))
-                {
-                    var share = total > 0 ? item.TotalAmount / total * 100 : 0;
-                    var color = ColorFor(item.CategoryId);
-                    <div class="cat-row">
-                        <div class="cat-row-head">
-                            <span class="cat-name"><span class="dot" style="background: @color.Dot;"></span>@item.CategoryName</span>
-                            <span class="num">@item.TotalAmount.ToString("C") <span class="muted">· @share.ToString("0")%</span></span>
-                        </div>
-                        <div class="bar-track">
-                            <div class="bar-fill" style="width: @Css(share)%; background: @color.Dot;"></div>
+                var hovered = HoveredSegment;
+                <div class="donut-wrap">
+                    <div class="donut">
+                        <svg viewBox="0 0 180 180" role="img" aria-label="Ripartizione delle spese per categoria">
+                            <circle class="donut-track" cx="90" cy="90" r="@DonutRadius"></circle>
+                            @foreach (var s in donutSegments)
+                            {
+                                <circle class="donut-seg @(IsDimmed(s.CategoryId) ? "dim" : "")"
+                                        cx="90" cy="90" r="@DonutRadius"
+                                        stroke="@s.Color"
+                                        stroke-dasharray="@Css(s.Dash) @Css(DonutCircumference - s.Dash)"
+                                        stroke-dashoffset="@Css(-s.Offset)"
+                                        @onmouseenter="() => hoveredCategoryId = s.CategoryId"
+                                        @onmouseleave="() => hoveredCategoryId = null"></circle>
+                            }
+                        </svg>
+                        <div class="donut-center">
+                            <span class="donut-center-label">@(hovered?.Name ?? "Totale")</span>
+                            <span class="donut-center-value serif num">@((hovered?.Amount ?? categoryTotal).ToString("C"))</span>
+                            <span class="donut-center-sub">@DonutCenterSub</span>
                         </div>
                     </div>
-                }
+
+                    <ul class="donut-legend">
+                        @foreach (var s in donutSegments)
+                        {
+                            <li class="legend-row @(IsDimmed(s.CategoryId) ? "dim" : "")"
+                                @onmouseenter="() => hoveredCategoryId = s.CategoryId"
+                                @onmouseleave="() => hoveredCategoryId = null">
+                                <span class="cat-icon" style="background: @ColorFor(s.CategoryId).PillBg; box-shadow: inset 0 0 0 2px @s.Color;" aria-hidden="true">@IconFor(s.Name)</span>
+                                <span class="legend-name">@s.Name</span>
+                                <span class="legend-amount num">@s.Amount.ToString("C")</span>
+                                <span class="legend-share muted num">@s.Share.ToString("0")%</span>
+                            </li>
+                        }
+                    </ul>
+                </div>
             }
         </div>
 
@@ -86,13 +116,18 @@ else
             <div class="month-chart">
                 @foreach (var m in lastSixMonths)
                 {
-                    <div class="month-col">
-                        <span class="month-value num">@(m.Total > 0 ? m.Total.ToString("C0") : "")</span>
+                    <div class="month-col" tabindex="0" role="img"
+                         aria-label="@m.FullLabel: @(m.Total > 0 ? m.Total.ToString("C") : "nessuna spesa")">
+                        <span class="month-value num">@(m.IsSelected && m.Total > 0 ? m.Total.ToString("C0") : "")</span>
                         <div class="month-bar-area">
-                            <div class="month-bar @(m.IsCurrent ? "current" : m.Total > 0 ? "has-value" : "")"
+                            <div class="month-tip" style="bottom: calc(@Css(m.HeightPercent)% + 8px);">
+                                <span class="month-tip-label">@m.FullLabel</span>
+                                <span class="month-tip-value num">@(m.Total > 0 ? m.Total.ToString("C") : "Nessuna spesa")</span>
+                            </div>
+                            <div class="month-bar @(m.IsSelected ? "current" : m.Total > 0 ? "has-value" : "")"
                                  style="height: @Css(m.HeightPercent)%;"></div>
                         </div>
-                        <span class="month-label @(m.IsCurrent ? "current" : "")">@m.Label</span>
+                        <span class="month-label @(m.IsSelected ? "current" : "")">@m.Label</span>
                     </div>
                 }
             </div>
@@ -100,11 +135,11 @@ else
     </div>
 
     <div class="card" style="padding: 8px;">
-        @if (expenses.Count == 0)
+        @if (monthExpenses.Count == 0)
         {
             <div class="empty-state">
-                <div class="serif" style="font-size: 24px; color: var(--text);">Nessuna spesa ancora</div>
-                <p>Aggiungi la prima spesa per vedere qui il riepilogo.</p>
+                <div class="serif" style="font-size: 24px; color: var(--text);">Nessuna spesa in questo mese</div>
+                <p>Aggiungi una spesa per vedere qui il riepilogo.</p>
                 <button class="btn-accent" @onclick="OpenExpenseModal">Aggiungi spesa</button>
             </div>
         }
@@ -121,11 +156,16 @@ else
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var expense in expenses.OrderByDescending(e => e.Date).ThenByDescending(e => e.Id))
+                    @foreach (var expense in monthExpenses.OrderByDescending(e => e.Date).ThenByDescending(e => e.Id))
                     {
                         var color = ColorFor(expense.CategoryId);
                         <tr>
-                            <td>@expense.Description</td>
+                            <td>
+                                <div class="expense-desc">
+                                    <span class="cat-icon" style="background: @color.PillBg;" aria-hidden="true">@IconFor(expense.CategoryName)</span>
+                                    @expense.Description
+                                </div>
+                            </td>
                             <td><span class="pill" style="background: @color.PillBg; color: @color.PillText;">@expense.CategoryName</span></td>
                             <td class="muted">@expense.Date.ToString("d MMM")</td>
                             <td class="col-amount num">@expense.Amount.ToString("C")</td>
@@ -174,7 +214,7 @@ else
                                 <option value="0">Scegli...</option>
                                 @foreach (var c in categories)
                                 {
-                                    <option value="@c.Id">@c.Name</option>
+                                    <option value="@c.Id">@IconFor(c.Name) @c.Name</option>
                                 }
                             </InputSelect>
                         </div>
@@ -214,7 +254,7 @@ else
             <ul class="cat-list">
                 @foreach (var c in categories)
                 {
-                    <li><span class="dot" style="background: @ColorFor(c.Id).Dot;"></span>@c.Name</li>
+                    <li><span class="cat-icon" style="background: @ColorFor(c.Id).PillBg;" aria-hidden="true">@IconFor(c.Name)</span>@c.Name</li>
                 }
             </ul>
         </div>
@@ -246,7 +286,14 @@ else
 }
 
 @code {
-    private record MonthBar(string Label, decimal Total, decimal HeightPercent, bool IsCurrent);
+    private record MonthBar(string Label, string FullLabel, decimal Total, decimal HeightPercent, bool IsSelected);
+
+    // Spicchio della ciambella: Dash = lunghezza visibile, Offset = punto di partenza sulla circonferenza
+    private record DonutSegment(int CategoryId, string Name, decimal Amount, decimal Share, string Color, double Dash, double Offset);
+
+    // Il raggio deve coincidere con il viewBox 180x180 usato nel markup (centro 90,90)
+    private const int DonutRadius = 70;
+    private static readonly double DonutCircumference = 2 * Math.PI * DonutRadius;
 
     // Tinte pastello per le categorie: (pallino/barra, sfondo pillola, testo pillola)
     private static readonly (string Dot, string PillBg, string PillText)[] Palette =
@@ -259,9 +306,29 @@ else
         ("#D69AA8", "#F7E4E8", "#8E4E5D"),
     };
 
+    // Parole chiave (parziali) del nome categoria → emoji. Vince la prima corrispondenza.
+    private static readonly (string[] Keywords, string Icon)[] CategoryIcons =
+    {
+        (new[] { "trasport", "benzin", "carburant", "autostrad", "treno", "taxi" }, "🚗"),
+        (new[] { "ristorant", "pranz", "cena", "caff", "pizz" }, "🍽️"),
+        (new[] { "supermerc", "aliment" }, "🛒"),
+        (new[] { "casa", "affitt", "bollett", "utenz", "mutuo" }, "🏠"),
+        (new[] { "salute", "farmac", "medic", "dentist" }, "💊"),
+        (new[] { "svago", "intratten", "cinema", "tempo libero", "giochi" }, "🎬"),
+        (new[] { "viagg", "vacanz" }, "✈️"),
+        (new[] { "shopping", "abbigliament", "vestit" }, "🛍️"),
+        (new[] { "istruzion", "scuola", "libri", "formazion" }, "📚"),
+        (new[] { "sport", "palestra" }, "💪"),
+        (new[] { "abbonament", "streaming" }, "📺"),
+        (new[] { "regal" }, "🎁"),
+        (new[] { "animal" }, "🐾"),
+    };
+
     private List<ExpenseDto> expenses = new();
+    private List<ExpenseDto> monthExpenses = new();
     private List<CategoryDto> categories = new();
     private List<CategorySummaryDto> categorySummary = new();
+    private List<DonutSegment> donutSegments = new();
     private List<MonthBar> lastSixMonths = new();
     private MonthComparisonDto? comparison;
 
@@ -271,41 +338,101 @@ else
     private string? formError;
     private string? toastMessage;
 
+    private DateTime selectedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private int? hoveredCategoryId;
+
     private bool isLoading = true;
     private bool showExpenseModal;
     private bool showCategoriesModal;
 
     private decimal currentMonthTotal;
+    private decimal categoryTotal;
     private int currentMonthCount;
     private int currentMonthCategoryCount;
     private decimal averageExpense;
 
+    private bool IsCurrentMonth =>
+        selectedMonth.Year == DateTime.Today.Year && selectedMonth.Month == DateTime.Today.Month;
+
+    private DonutSegment? HoveredSegment =>
+        hoveredCategoryId is int id ? donutSegments.FirstOrDefault(s => s.CategoryId == id) : null;
+
+    private string DonutCenterSub => HoveredSegment is { } h
+        ? $"{h.Share:0}% del totale"
+        : donutSegments.Count == 1 ? "1 categoria" : $"{donutSegments.Count} categorie";
+
+    private bool IsDimmed(int categoryId) =>
+        hoveredCategoryId is not null && hoveredCategoryId != categoryId;
+
     protected override async Task OnInitializedAsync() => await LoadAll();
+
+    private async Task ChangeMonth(int delta)
+    {
+        selectedMonth = selectedMonth.AddMonths(delta);
+        await LoadAll();
+    }
 
     private async Task LoadAll()
     {
         categories = await CategoryService.GetCategoriesAsync();
         expenses = await ExpenseService.GetExpensesAsync();
-        categorySummary = await ExpenseService.GetSummaryByCategoryAsync();
+        categorySummary = await ExpenseService.GetSummaryByCategoryAsync(selectedMonth.Year, selectedMonth.Month);
         var monthly = await ExpenseService.GetSummaryByMonthAsync();
-        comparison = await ExpenseService.GetMonthComparisonAsync();
+        comparison = await ExpenseService.GetMonthComparisonAsync(selectedMonth.Year, selectedMonth.Month);
 
-        var today = DateTime.Today;
-        var thisMonth = expenses.Where(e => e.Date.Year == today.Year && e.Date.Month == today.Month).ToList();
-        currentMonthTotal = comparison?.CurrentMonthTotal ?? thisMonth.Sum(e => e.Amount);
-        currentMonthCount = thisMonth.Count;
-        currentMonthCategoryCount = thisMonth.Select(e => e.CategoryId).Distinct().Count();
+        monthExpenses = expenses
+            .Where(e => e.Date.Year == selectedMonth.Year && e.Date.Month == selectedMonth.Month)
+            .ToList();
+        currentMonthTotal = comparison?.CurrentMonthTotal ?? monthExpenses.Sum(e => e.Amount);
+        currentMonthCount = monthExpenses.Count;
+        currentMonthCategoryCount = monthExpenses.Select(e => e.CategoryId).Distinct().Count();
         averageExpense = currentMonthCount > 0 ? currentMonthTotal / currentMonthCount : 0;
 
-        lastSixMonths = BuildLastSixMonths(monthly, today);
+        donutSegments = BuildDonut(categorySummary);
+        categoryTotal = donutSegments.Sum(s => s.Amount);
+        hoveredCategoryId = null;
+
+        lastSixMonths = BuildLastSixMonths(monthly, selectedMonth);
         isLoading = false;
     }
 
-    // Costruisce sempre 6 colonne, anche per i mesi senza spese (a zero)
-    private static List<MonthBar> BuildLastSixMonths(List<MonthlySummaryDto> monthly, DateTime today)
+    // Trasforma il riepilogo per categoria in spicchi: ogni spicchio è un cerchio SVG
+    // con stroke-dasharray (quanto è lungo) e stroke-dashoffset (dove parte)
+    private static List<DonutSegment> BuildDonut(List<CategorySummaryDto> summary)
+    {
+        var total = summary.Sum(c => c.TotalAmount);
+        if (total <= 0) return new();
+
+        var ordered = summary.OrderByDescending(c => c.TotalAmount).ToList();
+        var gap = ordered.Count > 1 ? 3.0 : 0.0; // piccolo spazio tra uno spicchio e l'altro
+        var offset = 0.0;
+        var result = new List<DonutSegment>();
+
+        foreach (var item in ordered)
+        {
+            var fraction = (double)(item.TotalAmount / total);
+            var length = fraction * DonutCircumference;
+
+            result.Add(new DonutSegment(
+                item.CategoryId,
+                item.CategoryName,
+                item.TotalAmount,
+                item.TotalAmount / total * 100,
+                ColorFor(item.CategoryId).Dot,
+                Math.Max(length - gap, 0.5),
+                offset));
+
+            offset += length;
+        }
+
+        return result;
+    }
+
+    // Costruisce sempre 6 colonne che finiscono nel mese selezionato, anche per i mesi senza spese (a zero)
+    private static List<MonthBar> BuildLastSixMonths(List<MonthlySummaryDto> monthly, DateTime reference)
     {
         var months = Enumerable.Range(0, 6)
-            .Select(i => today.AddMonths(i - 5))
+            .Select(i => reference.AddMonths(i - 5))
             .Select(d => (Date: d, Total: monthly.FirstOrDefault(m => m.Year == d.Year && m.Month == d.Month)?.TotalAmount ?? 0))
             .ToList();
 
@@ -313,13 +440,14 @@ else
 
         return months.Select(m => new MonthBar(
             Capitalize(m.Date.ToString("MMM").TrimEnd('.')),
+            Capitalize(m.Date.ToString("MMMM yyyy")),
             m.Total,
             max > 0 ? m.Total / max * 100 : 0,
-            m.Date.Year == today.Year && m.Date.Month == today.Month)).ToList();
+            m.Date.Year == reference.Year && m.Date.Month == reference.Month)).ToList();
     }
 
     private string DeltaText => comparison?.PercentageChange is decimal p
-        ? $"{(p > 0 ? "+" : "")}{p:0.#}% vs mese scorso"
+        ? $"{(p > 0 ? "+" : "")}{p:0.#}% vs mese precedente"
         : "Nessun confronto";
 
     private string DeltaStyle => comparison?.PercentageChange is decimal p
@@ -390,8 +518,24 @@ else
     private static (string Dot, string PillBg, string PillText) ColorFor(int categoryId) =>
         Palette[Math.Abs(categoryId) % Palette.Length];
 
-    // Numeri dentro il CSS: sempre col punto, mai con la virgola italiana
+    private static string IconFor(string? categoryName)
+    {
+        if (!string.IsNullOrWhiteSpace(categoryName))
+        {
+            foreach (var (keywords, icon) in CategoryIcons)
+            {
+                if (keywords.Any(k => categoryName.Contains(k, StringComparison.OrdinalIgnoreCase)))
+                    return icon;
+            }
+        }
+        return "🏷️";
+    }
+
+    // Numeri dentro il CSS/SVG: sempre col punto, mai con la virgola italiana
     private static string Css(decimal value) =>
+        value.ToString("0.##", CultureInfo.InvariantCulture);
+
+    private static string Css(double value) =>
         value.ToString("0.##", CultureInfo.InvariantCulture);
 
     private static string Capitalize(string s) =>

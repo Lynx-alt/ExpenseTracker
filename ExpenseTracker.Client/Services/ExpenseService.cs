@@ -30,10 +30,17 @@ public class ExpenseService
         return response.IsSuccessStatusCode;
     }
 
-    public async Task<List<CategorySummaryDto>> GetSummaryByCategoryAsync()
+    public async Task<List<CategorySummaryDto>> GetSummaryByCategoryAsync(int year, int month)
     {
-        var result = await _httpClient.GetFromJsonAsync<List<CategorySummaryDto>>("api/expenses/summary-by-category");
+        var result = await _httpClient.GetFromJsonAsync<List<CategorySummaryDto>>(
+            $"api/expenses/summary-by-category?year={year}&month={month}");
         return result ?? new List<CategorySummaryDto>();
+    }
+
+    public async Task<MonthComparisonDto?> GetMonthComparisonAsync(int year, int month)
+    {
+        return await _httpClient.GetFromJsonAsync<MonthComparisonDto>(
+            $"api/expenses/month-comparison?year={year}&month={month}");
     }
 
     public async Task<List<MonthlySummaryDto>> GetSummaryByMonthAsync()
@@ -42,8 +49,4 @@ public class ExpenseService
         return result ?? new List<MonthlySummaryDto>();
     }
 
-    public async Task<MonthComparisonDto?> GetMonthComparisonAsync()
-    {
-        return await _httpClient.GetFromJsonAsync<MonthComparisonDto>("api/expenses/month-comparison");
-    }
 }
