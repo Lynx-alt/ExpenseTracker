@@ -28,7 +28,6 @@ public class BudgetsController : BaseApiController
 
         var budgets = await _context.Budgets
             .Where(b => b.UserId == currentUserId)
-            .Include(b => b.Category)
             .Select(b => new BudgetDto
             {
                 Id = b.Id,
@@ -50,37 +49,41 @@ public class BudgetsController : BaseApiController
         var currentUserId = CurrentUserId;
 
         var budget = await _context.Budgets
-            .Include(b => b.Category)
-            .FirstOrDefaultAsync(b => b.Id == id && b.UserId == currentUserId);
+            .Where(b => b.Id == id && b.UserId == currentUserId)
+            .Select(b => new BudgetDto
+            {
+                Id = b.Id,
+                MonthlyLimit = b.MonthlyLimit,
+                CategoryId = b.CategoryId,
+                CategoryName = b.Category!.Name
+            })
+            .FirstOrDefaultAsync();
 
         if (budget == null)
         {
             return NotFound();
         }
 
-        return Ok(new BudgetDto
-        {
-            Id = budget.Id,
-            MonthlyLimit = budget.MonthlyLimit,
-            CategoryId = budget.CategoryId,
-            CategoryName = budget.Category!.Name
-        });
+        return Ok(budget);
     }
 
     // POST: api/budgets
     [HttpPost]
     [ProducesResponseType(typeof(BudgetDto), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<BudgetDto>> CreateBudget(CreateBudgetDto dto)
     {
         var currentUserId = CurrentUserId;
 
-        var alreadyExists = await _context.Budgets
-            .AnyAsync(b => b.CategoryId == dto.CategoryId && b.UserId == currentUserId);
-
-        if (alreadyExists)
+        if (!await CategoryBelongsToUserAsync(dto.CategoryId, currentUserId))
         {
-            return BadRequest(new { error = "Esiste già un budget per questa categoria." });
+            return BadRequest(new { error = "Categoria non valida." });
+        }
+
+        if (await BudgetExistsForCategoryAsync(dto.CategoryId, currentUserId))
+        {
+            return Conflict(new { error = "Esiste già un budget per questa categoria." });
         }
 
         var budget = new Budget
@@ -109,7 +112,9 @@ public class BudgetsController : BaseApiController
     // PUT: api/budgets/5
     [HttpPut("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> UpdateBudget(int id, CreateBudgetDto dto)
     {
         var currentUserId = CurrentUserId;
@@ -120,6 +125,16 @@ public class BudgetsController : BaseApiController
         if (budget == null)
         {
             return NotFound();
+        }
+
+        if (!await CategoryBelongsToUserAsync(dto.CategoryId, currentUserId))
+        {
+            return BadRequest(new { error = "Categoria non valida." });
+        }
+
+        if (await BudgetExistsForCategoryAsync(dto.CategoryId, currentUserId, excludeId: id))
+        {
+            return Conflict(new { error = "Esiste già un budget per questa categoria." });
         }
 
         budget.MonthlyLimit = dto.MonthlyLimit;
@@ -151,4 +166,13 @@ public class BudgetsController : BaseApiController
 
         return NoContent();
     }
+
+    private Task<bool> CategoryBelongsToUserAsync(int categoryId, int userId) =>
+        _context.Categories.AnyAsync(c => c.Id == categoryId && c.UserId == userId);
+
+    private Task<bool> BudgetExistsForCategoryAsync(int categoryId, int userId, int? excludeId = null) =>
+        _context.Budgets.AnyAsync(b =>
+            b.CategoryId == categoryId &&
+            b.UserId == userId &&
+            (excludeId == null || b.Id != excludeId));
 }

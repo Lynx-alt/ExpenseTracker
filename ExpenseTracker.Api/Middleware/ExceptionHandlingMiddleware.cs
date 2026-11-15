@@ -3,7 +3,7 @@ using System.Text.Json;
 
 namespace ExpenseTracker.Api.Middleware;
 
-public class ExceptionHandlingMiddleware
+public class  ExceptionHandlingMiddleware
 {
     private readonly RequestDelegate _next;
     private readonly ILogger<ExceptionHandlingMiddleware> _logger;
@@ -19,6 +19,10 @@ public class ExceptionHandlingMiddleware
         try
         {
             await _next(context);
+        }
+        catch (OperationCanceledException) when (context.RequestAborted.IsCancellationRequested) 
+        {
+            _logger.LogDebug("Richiesta annullata dal client");                                                                    
         }
         catch (Exception ex)
         {

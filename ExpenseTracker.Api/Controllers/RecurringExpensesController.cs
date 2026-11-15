@@ -28,7 +28,6 @@ public class RecurringExpensesController : BaseApiController
 
         var items = await _context.RecurringExpenses
             .Where(r => r.UserId == currentUserId)
-            .Include(r => r.Category)
             .Select(r => new RecurringExpenseDto
             {
                 Id = r.Id,
@@ -53,32 +52,39 @@ public class RecurringExpensesController : BaseApiController
         var currentUserId = CurrentUserId;
 
         var item = await _context.RecurringExpenses
-            .Include(r => r.Category)
-            .FirstOrDefaultAsync(r => r.Id == id && r.UserId == currentUserId);
+            .Where(r => r.Id == id && r.UserId == currentUserId)
+            .Select(r => new RecurringExpenseDto
+            {
+                Id = r.Id,
+                Description = r.Description,
+                Amount = r.Amount,
+                Frequency = r.Frequency.ToString(),
+                NextDueDate = r.NextDueDate,
+                CategoryId = r.CategoryId,
+                CategoryName = r.Category!.Name
+            })
+            .FirstOrDefaultAsync();
 
         if (item == null)
         {
             return NotFound();
         }
 
-        return Ok(new RecurringExpenseDto
-        {
-            Id = item.Id,
-            Description = item.Description,
-            Amount = item.Amount,
-            Frequency = item.Frequency.ToString(),
-            NextDueDate = item.NextDueDate,
-            CategoryId = item.CategoryId,
-            CategoryName = item.Category!.Name
-        });
+        return Ok(item);
     }
 
     // POST: api/recurringexpenses
     [HttpPost]
     [ProducesResponseType(typeof(RecurringExpenseDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     public async Task<ActionResult<RecurringExpenseDto>> CreateRecurringExpense(CreateRecurringExpenseDto dto)
     {
         var currentUserId = CurrentUserId;
+
+        if (!await CategoryBelongsToUserAsync(dto.CategoryId, currentUserId))
+        {
+            return BadRequest(new { error = "Categoria non valida." });
+        }
 
         var item = new RecurringExpense
         {
@@ -112,6 +118,7 @@ public class RecurringExpensesController : BaseApiController
     // PUT: api/recurringexpenses/5
     [HttpPut("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> UpdateRecurringExpense(int id, CreateRecurringExpenseDto dto)
     {
@@ -123,6 +130,11 @@ public class RecurringExpensesController : BaseApiController
         if (item == null)
         {
             return NotFound();
+        }
+
+        if (!await CategoryBelongsToUserAsync(dto.CategoryId, currentUserId))
+        {
+            return BadRequest(new { error = "Categoria non valida." });
         }
 
         item.Description = dto.Description;
@@ -157,4 +169,7 @@ public class RecurringExpensesController : BaseApiController
 
         return NoContent();
     }
+
+    private Task<bool> CategoryBelongsToUserAsync(int categoryId, int userId) =>
+        _context.Categories.AnyAsync(c => c.Id == categoryId && c.UserId == userId);
 }
